@@ -1,36 +1,64 @@
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(tag = "type")]
+#[serde(rename_all = "snake_case")]
 pub enum MessageBody {
-    #[serde(rename = "init")]
     Init(InitMessage),
-
-    #[serde(rename = "topology")]
     Topology(TopologyMessage),
-
-    #[serde(rename = "error")]
+    Echo(EchoMessage),
     Error(ErrorMessage),
 
     #[serde(other)]
     Unknown,
 }
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct EchoMessage {
+    pub msg_id: u32,
+    echo: String,
+}
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct EchoMessageResponse {
+    #[serde(rename = "type")]
+    pub ty: String,
+    pub msg_id: u32,
+    in_reply_to: u32,
+    echo: String,
+}
+
+impl MessageResponse for EchoMessage {
+    type Response = EchoMessageResponse;
+
+    fn from_message_body(body: &MessageBody, in_reply_to: u32) -> Option<Self::Response> {
+        if let MessageBody::Echo(msg) = body {
+            Some(EchoMessageResponse {
+                ty: String::from("echo_ok"),
+                msg_id: msg.msg_id,
+                in_reply_to,
+                echo: msg.echo.clone(),
+            })
+        } else {
+            None
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InitMessage {
-    msg_id: u32,
+    pub msg_id: u32,
     node_id: String,
     node_ids: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TopologyMessage {
-    msg_id: u32,
+    pub msg_id: u32,
     topology: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ErrorMessage {
     in_reply_to: u32,
     // #[serde(flatten)]
@@ -59,12 +87,12 @@ pub enum MaelstromError {
 pub trait MessageResponse {
     type Response: Serialize + Deserialize<'static>;
 
-    fn from_message_body(_body: &MessageBody) -> Option<Self::Response> {
+    fn from_message_body(_body: &MessageBody, _in_reply_to: u32) -> Option<Self::Response> {
         None
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct TopologyOkResponse {
     #[serde(rename = "type")]
     type_field: String,
@@ -75,7 +103,7 @@ pub struct TopologyOkResponse {
 impl MessageResponse for TopologyMessage {
     type Response = TopologyOkResponse;
 
-    fn from_message_body(body: &MessageBody) -> Option<Self::Response> {
+    fn from_message_body(body: &MessageBody, in_reply_to: u32) -> Option<Self::Response> {
         if let MessageBody::Topology(msg) = body {
             Some(TopologyOkResponse {
                 type_field: "topology_ok".to_string(),
@@ -89,7 +117,7 @@ impl MessageResponse for TopologyMessage {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct InitOkResponse {
     #[serde(rename = "type")]
     type_field: String,
@@ -99,11 +127,11 @@ pub struct InitOkResponse {
 impl MessageResponse for InitMessage {
     type Response = InitOkResponse;
 
-    fn from_message_body(body: &MessageBody) -> Option<Self::Response> {
+    fn from_message_body(body: &MessageBody, in_reply_to: u32) -> Option<Self::Response> {
         if let MessageBody::Init(msg) = body {
             Some(InitOkResponse {
                 type_field: "init_ok".to_string(),
-                in_reply_to: msg.msg_id,
+                in_reply_to,
             })
         } else {
             None
